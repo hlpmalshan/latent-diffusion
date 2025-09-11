@@ -29,15 +29,15 @@ data:
     batch_size: 12
     wrap: True
     train:
-      target: ldm.data.imagenet.ImageNetSRTrain
+      target: ldm.data.cifar10.CIFAR10Train
       params:
-        size: 256
-        degradation: pil_nearest
+        size: 32
+        # degradation: pil_nearest
     validation:
-      target: ldm.data.imagenet.ImageNetSRValidation
+      target: ldm.data.cifar10.CIFAR10Validation
       params:
-        size: 256
-        degradation: pil_nearest
+        size: 32
+        # degradation: pil_nearest
 
 lightning:
   callbacks:
