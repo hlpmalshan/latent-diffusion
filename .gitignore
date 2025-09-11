@@ -1,0 +1,15 @@
+logs
+data
+__pycache__/
+diffusion_environment.yml
+env.yml
+latent_diffusion.egg-info/
+ldm/__pycache__/
+ldm/models/__pycache__/
+ldm/models/diffusion/__pycache__/
+ldm/modules/__pycache__/
+ldm/modules/diffusionmodules/__pycache__/
+ldm/modules/distributions/__pycache__/
+ldm/modules/losses/__pycache__/
+src/
+taming/
