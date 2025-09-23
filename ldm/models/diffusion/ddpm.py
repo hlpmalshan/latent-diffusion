@@ -17,6 +17,8 @@ from functools import partial
 from tqdm import tqdm
 from torchvision.utils import make_grid
 from pytorch_lightning.utilities.distributed import rank_zero_only
+import os 
+import csv
 
 from ldm.util import log_txt_as_img, exists, default, ismap, isimage, mean_flat, count_params, instantiate_from_config
 from ldm.modules.ema import LitEma
@@ -40,6 +42,15 @@ def disabled_train(self, mode=True):
 def uniform_on_device(r1, r2, shape, device):
     return (r1 - r2) * torch.rand(*shape, device=device) + r2
 
+def update_csv(filepath, step, mean, std):
+    """Helper function to append statistics to a CSV file."""
+    file_exists = os.path.isfile(filepath)
+    with open(filepath, 'a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(['step', 'mean', 'standard_deviation'])
+        writer.writerow([step, mean, std])
+    return 1
 
 class DDPM(pl.LightningModule):
     # classic DDPM with Gaussian diffusion, in image space
@@ -71,6 +82,7 @@ class DDPM(pl.LightningModule):
                  use_positional_encodings=False,
                  learn_logvar=False,
                  logvar_init=0.,
+                 reg = 0.,
                  ):
         super().__init__()
         assert parameterization in ["eps", "x0"], 'currently only supporting "eps" and "x0"'
@@ -310,11 +322,13 @@ class DDPM(pl.LightningModule):
 
         loss_dict.update({f'{log_prefix}/loss_simple': loss.mean()})
         loss_simple = loss.mean() * self.l_simple_weight
+        
+        iso_loss = (1 - model_out.flatten().square().mean()).square()
 
         loss_vlb = (self.lvlb_weights[t] * loss).mean()
         loss_dict.update({f'{log_prefix}/loss_vlb': loss_vlb})
 
-        loss = loss_simple + self.original_elbo_weight * loss_vlb
+        loss = loss_simple + self.original_elbo_weight * loss_vlb + self.reg * iso_loss
 
         loss_dict.update({f'{log_prefix}/loss': loss})
 
@@ -434,9 +448,15 @@ class LatentDiffusion(DDPM):
                  conditioning_key=None,
                  scale_factor=1.0,
                  scale_by_std=False,
+                 save_statistics=False,
+                 log_path="logs",
+                 reg=0.0,
                  *args, **kwargs):
         self.num_timesteps_cond = default(num_timesteps_cond, 1)
         self.scale_by_std = scale_by_std
+        self.save_statistics = save_statistics
+        self.log_path = log_path
+        self.reg = reg
         assert self.num_timesteps_cond <= kwargs['timesteps']
         # for backwards compatibility after implementation of DiffusionWrapper
         if conditioning_key is None:
@@ -1013,7 +1033,18 @@ class LatentDiffusion(DDPM):
         noise = default(noise, lambda: torch.randn_like(x_start))
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         model_output = self.apply_model(x_noisy, t, cond)
+        
+        batch_norm_mean = model_output.square().mean(dim=(1, 2, 3)).mean(dim=0)
+        batch_norm_standard_deviation = model_output.square().mean(dim=(1, 2, 3)).std(dim=0)
 
+        # Save statistics to CSV if enabled and at appropriate steps
+        if self.save_statistics and (self.global_step == 1 or self.global_step % 100 == 0):
+            os.makedirs(self.log_path, exist_ok=True)
+            csv_path = os.path.join(self.log_path, "statistics.csv")
+            appended = update_csv(csv_path, self.global_step, batch_norm_mean.item(), batch_norm_standard_deviation.item())
+            if appended > 0:
+                print(f"Saved statistics at step {self.global_step}")
+        
         loss_dict = {}
         prefix = 'train' if self.training else 'val'
 
@@ -1035,11 +1066,13 @@ class LatentDiffusion(DDPM):
             loss_dict.update({'logvar': self.logvar.data.mean()})
 
         loss = self.l_simple_weight * loss.mean()
+        
+        iso_loss = (1 - model_output.flatten().square().mean()).square()
 
         loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3))
         loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
         loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
-        loss += (self.original_elbo_weight * loss_vlb)
+        loss = loss + (self.original_elbo_weight * loss_vlb) + (self.reg * iso_loss)
         loss_dict.update({f'{prefix}/loss': loss})
 
         return loss, loss_dict
@@ -1305,43 +1338,43 @@ class LatentDiffusion(DDPM):
                 # samples, z_denoise_row = self.sample(cond=c, batch_size=N, return_intermediates=True)
             x_samples = self.decode_first_stage(samples)
             log["samples"] = x_samples
-            if plot_denoise_rows:
-                denoise_grid = self._get_denoise_row_from_list(z_denoise_row)
-                log["denoise_row"] = denoise_grid
+            # if plot_denoise_rows:
+            #     denoise_grid = self._get_denoise_row_from_list(z_denoise_row)
+            #     log["denoise_row"] = denoise_grid
 
-            if quantize_denoised and not isinstance(self.first_stage_model, AutoencoderKL) and not isinstance(
-                    self.first_stage_model, IdentityFirstStage):
-                # also display when quantizing x0 while sampling
-                with self.ema_scope("Plotting Quantized Denoised"):
-                    samples, z_denoise_row = self.sample_log(cond=c,batch_size=N,ddim=use_ddim,
-                                                             ddim_steps=ddim_steps,eta=ddim_eta,
-                                                             quantize_denoised=True)
-                    # samples, z_denoise_row = self.sample(cond=c, batch_size=N, return_intermediates=True,
-                    #                                      quantize_denoised=True)
-                x_samples = self.decode_first_stage(samples.to(self.device))
-                log["samples_x0_quantized"] = x_samples
+            # if quantize_denoised and not isinstance(self.first_stage_model, AutoencoderKL) and not isinstance(
+            #         self.first_stage_model, IdentityFirstStage):
+            #     # also display when quantizing x0 while sampling
+            #     with self.ema_scope("Plotting Quantized Denoised"):
+            #         samples, z_denoise_row = self.sample_log(cond=c,batch_size=N,ddim=use_ddim,
+            #                                                  ddim_steps=ddim_steps,eta=ddim_eta,
+            #                                                  quantize_denoised=True)
+            #         # samples, z_denoise_row = self.sample(cond=c, batch_size=N, return_intermediates=True,
+            #         #                                      quantize_denoised=True)
+            #     x_samples = self.decode_first_stage(samples.to(self.device))
+            #     log["samples_x0_quantized"] = x_samples
 
-            if inpaint:
-                # make a simple center square
-                b, h, w = z.shape[0], z.shape[2], z.shape[3]
-                mask = torch.ones(N, h, w).to(self.device)
-                # zeros will be filled in
-                mask[:, h // 4:3 * h // 4, w // 4:3 * w // 4] = 0.
-                mask = mask[:, None, ...]
-                with self.ema_scope("Plotting Inpaint"):
+            # if inpaint:
+            #     # make a simple center square
+            #     b, h, w = z.shape[0], z.shape[2], z.shape[3]
+            #     mask = torch.ones(N, h, w).to(self.device)
+            #     # zeros will be filled in
+            #     mask[:, h // 4:3 * h // 4, w // 4:3 * w // 4] = 0.
+            #     mask = mask[:, None, ...]
+            #     with self.ema_scope("Plotting Inpaint"):
 
-                    samples, _ = self.sample_log(cond=c,batch_size=N,ddim=use_ddim, eta=ddim_eta,
-                                                ddim_steps=ddim_steps, x0=z[:N], mask=mask)
-                x_samples = self.decode_first_stage(samples.to(self.device))
-                log["samples_inpainting"] = x_samples
-                log["mask"] = mask
+            #         samples, _ = self.sample_log(cond=c,batch_size=N,ddim=use_ddim, eta=ddim_eta,
+            #                                     ddim_steps=ddim_steps, x0=z[:N], mask=mask)
+            #     x_samples = self.decode_first_stage(samples.to(self.device))
+            #     log["samples_inpainting"] = x_samples
+            #     log["mask"] = mask
 
-                # outpaint
-                with self.ema_scope("Plotting Outpaint"):
-                    samples, _ = self.sample_log(cond=c, batch_size=N, ddim=use_ddim,eta=ddim_eta,
-                                                ddim_steps=ddim_steps, x0=z[:N], mask=mask)
-                x_samples = self.decode_first_stage(samples.to(self.device))
-                log["samples_outpainting"] = x_samples
+            #     # outpaint
+            #     with self.ema_scope("Plotting Outpaint"):
+            #         samples, _ = self.sample_log(cond=c, batch_size=N, ddim=use_ddim,eta=ddim_eta,
+            #                                     ddim_steps=ddim_steps, x0=z[:N], mask=mask)
+            #     x_samples = self.decode_first_stage(samples.to(self.device))
+            #     log["samples_outpainting"] = x_samples
 
         if plot_progressive_rows:
             with self.ema_scope("Plotting Progressives"):

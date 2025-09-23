@@ -68,11 +68,11 @@ data:
     num_workers: 4
     wrap: False
     train:
-      target: ldm.data.cifar10.CIFAR10Train
+      target: ldm.data.cifar100.CIFAR100Train
       params:
         size: 32
     validation:
-     target: ldm.data.cifar10.CIFAR10Validation
+      target: ldm.data.cifar100.CIFAR100Validation
       params:
         size: 32
 
