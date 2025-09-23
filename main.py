@@ -117,8 +117,14 @@ def get_parser(**parser_kwargs):
         type=str2bool,
         nargs="?",
         const=True,
-        default=True,
+        default=False,
         help="scale base-lr by ngpu * batch_size * n_accumulate",
+    )
+    parser.add_argument(
+        "--reg",
+        type=float,
+        default=0.0,
+        help="regularization parameter for iso loss",
     )
     return parser
 
@@ -532,6 +538,8 @@ if __name__ == "__main__":
         lightning_config.trainer = trainer_config
 
         # model
+        config.model.params.reg = opt.reg   # Add reg parameter
+        config.model.params.log_path = ckptdir  # Set log_path to ckptdir
         model = instantiate_from_config(config.model)
 
         # trainer and callbacks
