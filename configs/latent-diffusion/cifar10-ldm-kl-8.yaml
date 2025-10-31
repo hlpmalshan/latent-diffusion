@@ -44,7 +44,7 @@ model:
       params:
         embed_dim: 3
         monitor: "val/rec_loss"
-        ckpt_path: "logs/2025-09-12T08-19-04_autoencoder_kl_8x8x6/checkpoints/epoch=000868.ckpt"
+        ckpt_path: "logs/2025-09-06T19-02-37_autoencoder_kl_8x8x6/checkpoints/epoch=000359.ckpt"
         ddconfig:
           double_z: True
           z_channels: 3
@@ -72,7 +72,7 @@ data:
       params:
         size: 32
     validation:
-     target: ldm.data.cifar10.CIFAR10Validation
+      target: ldm.data.cifar10.CIFAR10Validation
       params:
         size: 32
 
