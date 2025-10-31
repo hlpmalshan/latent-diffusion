@@ -47,14 +47,25 @@ def make_ddim_timesteps(ddim_discr_method, num_ddim_timesteps, num_ddpm_timestep
     if ddim_discr_method == 'uniform':
         c = num_ddpm_timesteps // num_ddim_timesteps
         ddim_timesteps = np.asarray(list(range(0, num_ddpm_timesteps, c)))
+        # Ensure the last timestep does not exceed num_ddpm_timesteps - 1
+        ddim_timesteps = ddim_timesteps[ddim_timesteps < num_ddpm_timesteps]
+        # Ensure the last timestep is num_ddpm_timesteps - 1 for final alpha
+        if len(ddim_timesteps) > 0 and ddim_timesteps[-1] < num_ddpm_timesteps - 1:
+            ddim_timesteps = np.append(ddim_timesteps, num_ddpm_timesteps - 1)
     elif ddim_discr_method == 'quad':
         ddim_timesteps = ((np.linspace(0, np.sqrt(num_ddpm_timesteps * .8), num_ddim_timesteps)) ** 2).astype(int)
+        # Ensure the last timestep does not exceed num_ddpm_timesteps - 1
+        ddim_timesteps = ddim_timesteps[ddim_timesteps < num_ddpm_timesteps]
+        # Ensure the last timestep is num_ddpm_timesteps - 1 for final alpha
+        if len(ddim_timesteps) > 0 and ddim_timesteps[-1] < num_ddpm_timesteps - 1:
+            ddim_timesteps = np.append(ddim_timesteps, num_ddpm_timesteps - 1)
     else:
         raise NotImplementedError(f'There is no ddim discretization method called "{ddim_discr_method}"')
 
     # assert ddim_timesteps.shape[0] == num_ddim_timesteps
     # add one to get the final alpha values right (the ones from first scale to data during sampling)
-    steps_out = ddim_timesteps + 1
+    # steps_out = ddim_timesteps + 1
+    steps_out = ddim_timesteps
     if verbose:
         print(f'Selected timesteps for ddim sampler: {steps_out}')
     return steps_out

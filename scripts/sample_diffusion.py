@@ -205,7 +205,7 @@ def get_parser():
         type=int,
         nargs="?",
         help="number of steps for ddim and fastdpm sampling",
-        default=50
+        default=1000
     )
     parser.add_argument(
         "--batch_size",
@@ -266,12 +266,36 @@ if __name__ == "__main__":
         logdir = opt.resume.rstrip("/")
         ckpt = os.path.join(logdir, "model.ckpt")
 
-    base_configs = sorted(glob.glob(os.path.join(logdir, "config.yaml")))
-    opt.base = base_configs
-
-    configs = [OmegaConf.load(cfg) for cfg in opt.base]
+    # Automate config.yaml creation
+    config_dir = os.path.join(os.path.dirname(logdir), "configs")
+    project_yaml = sorted(glob.glob(os.path.join(config_dir, "*-project.yaml")))
+    lightning_yaml = sorted(glob.glob(os.path.join(config_dir, "*-lightning.yaml")))
+    
+    if not project_yaml or not lightning_yaml:
+        raise ValueError(f"Missing project.yaml or lightning.yaml in {config_dir}")
+    
+    # Load and merge configurations
+    configs = [OmegaConf.load(project_yaml[0]), OmegaConf.load(lightning_yaml[0])]
     cli = OmegaConf.from_dotlist(unknown)
     config = OmegaConf.merge(*configs, cli)
+    
+    # Save merged config as config.yaml in checkpoints directory
+    checkpoint_dir = os.path.join(logdir, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    config_path = os.path.join(checkpoint_dir, "config.yaml")
+    with open(config_path, 'w') as f:
+        OmegaConf.save(config, f)
+    print(f"Saved merged configuration to {config_path}")
+    
+    # Update base_configs to point to the newly created config.yaml
+    opt.base = [config_path]
+    
+    # base_configs = sorted(glob.glob(os.path.join(logdir, "config.yaml")))
+    # opt.base = base_configs
+
+    # configs = [OmegaConf.load(cfg) for cfg in opt.base]
+    # cli = OmegaConf.from_dotlist(unknown)
+    # config = OmegaConf.merge(*configs, cli)
 
     gpu = True
     eval_mode = True
