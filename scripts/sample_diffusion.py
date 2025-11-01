@@ -212,7 +212,7 @@ def get_parser():
         type=int,
         nargs="?",
         help="the bs",
-        default=10
+        default=64
     )
     return parser
 
