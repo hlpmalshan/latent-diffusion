@@ -214,18 +214,24 @@ def get_parser():
         help="the bs",
         default=64
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cuda",
+        help="device to use (e.g., cuda, cuda:1, cpu)"
+    )
     return parser
 
 
-def load_model_from_config(config, sd):
+def load_model_from_config(config, sd, device="cuda"):
     model = instantiate_from_config(config)
     model.load_state_dict(sd,strict=False)
-    model.cuda()
+    model = model.to(device)
     model.eval()
     return model
 
 
-def load_model(config, ckpt, gpu, eval_mode):
+def load_model(config, ckpt, device, eval_mode):
     if ckpt:
         print(f"Loading model from {ckpt}")
         pl_sd = torch.load(ckpt, map_location="cpu")
@@ -234,7 +240,7 @@ def load_model(config, ckpt, gpu, eval_mode):
         pl_sd = {"state_dict": None}
         global_step = None
     model = load_model_from_config(config.model,
-                                   pl_sd["state_dict"])
+                                   pl_sd["state_dict"], device=device)
 
     return model, global_step
 
@@ -248,6 +254,10 @@ if __name__ == "__main__":
     opt, unknown = parser.parse_known_args()
     ckpt = None
 
+    # Set device from argument, fallback to CPU if CUDA not available
+    device = torch.device(opt.device if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+    
     if not os.path.exists(opt.resume):
         raise ValueError("Cannot find {}".format(opt.resume))
     if os.path.isfile(opt.resume):
@@ -308,7 +318,7 @@ if __name__ == "__main__":
 
     print(config)
 
-    model, global_step = load_model(config, ckpt, gpu, eval_mode)
+    model, global_step = load_model(config, ckpt, device, eval_mode)
     print(f"global step: {global_step}")
     print(75 * "=")
     print("logging to:")
