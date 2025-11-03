@@ -58,10 +58,10 @@ class CIFAR100Base(Dataset):
     
 class CIFAR100Train(CIFAR100Base):
     def __init__(self, **kwargs):
-        super().__init__(txt_file="data/cifar-100-python/train.txt", data_root="data/cifar-100-python", **kwargs)
+        super().__init__(txt_file="data/cifar-100-python/train.txt", data_root="", **kwargs)
 
 
 class CIFAR100Validation(CIFAR100Base):
     def __init__(self, flip_p=0., **kwargs):
-        super().__init__(txt_file="data/cifar-100-python/test.txt", data_root="data/cifar-100-python",
+        super().__init__(txt_file="data/cifar-100-python/test.txt", data_root="",
                          flip_p=flip_p, **kwargs)
