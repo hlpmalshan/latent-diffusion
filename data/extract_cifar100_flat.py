@@ -13,8 +13,8 @@ def load_cifar100(file):
     return data
 
 # Output folders (avoid conflict with pickle files)
-train_out = "train_images"
-test_out = "test_images"
+train_out = "train"
+test_out = "test"
 os.makedirs(train_out, exist_ok=True)
 os.makedirs(test_out, exist_ok=True)
 
