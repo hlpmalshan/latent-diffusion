@@ -25,7 +25,7 @@ def get_parser(**parser_kwargs):
     def str2bool(v):
         if isinstance(v, bool):
             return v
-        if v.lower() in ("yes", "true", "d", "y", "1"):
+        if v.lower() in ("yes", "true", "t", "y", "1"):
             return True
         elif v.lower() in ("no", "false", "f", "n", "0"):
             return False
@@ -117,7 +117,7 @@ def get_parser(**parser_kwargs):
         type=str2bool,
         nargs="?",
         const=True,
-        default=False,
+        default=True,
         help="scale base-lr by ngpu * batch_size * n_accumulate",
     )
     parser.add_argument(
@@ -538,8 +538,6 @@ if __name__ == "__main__":
         lightning_config.trainer = trainer_config
 
         # model
-        config.model.params.reg = opt.reg   # Add reg parameter
-        config.model.params.log_path = ckptdir  # Set log_path to ckptdir
         model = instantiate_from_config(config.model)
 
         # trainer and callbacks
