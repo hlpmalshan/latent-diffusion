@@ -91,6 +91,6 @@ lightning:
     accumulate_grad_batches: 1
     gradient_clip_val: 1  
     max_epochs: 2000
-    max_steps: -1
+    max_steps: 780000
     accelerator: "ddp"
     gpus: "2"
