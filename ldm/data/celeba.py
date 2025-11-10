@@ -58,10 +58,10 @@ class CELEBABase(Dataset):
     
 class CELEBATrain(CELEBABase):
     def __init__(self, **kwargs):
-        super().__init__(txt_file="data/celeba/train.txt", data_root="data/celeba/", **kwargs)
+        super().__init__(txt_file="data/celeba/train.txt", data_root="", **kwargs)
 
 
 class CELEBAValidation(CELEBABase):
     def __init__(self, flip_p=0., **kwargs):
-        super().__init__(txt_file="data/celeba/test.txt", data_root="data/celeba/",
+        super().__init__(txt_file="data/celeba/test.txt", data_root="",
                          flip_p=flip_p, **kwargs)
