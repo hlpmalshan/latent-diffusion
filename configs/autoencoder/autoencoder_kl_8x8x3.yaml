@@ -8,7 +8,7 @@ model:
       target: ldm.modules.losses.LPIPSWithDiscriminator
       params:
         disc_start: 10000
-        kl_weight: 0.000001
+        kl_weight: 0.00001
         disc_weight: 0.5
 
     ddconfig:
@@ -21,7 +21,7 @@ model:
       ch_mult: [1, 2, 4, 8]  # num_down = len(ch_mult)-1
       num_res_blocks: 2
       attn_resolutions: [ ]
-      dropout: 0.0
+      dropout: 0.1
 
 
 data:
@@ -48,6 +48,13 @@ lightning:
         batch_frequency: 1000
         max_images: 8
         increase_log_steps: True
+  scheduler:
+  target: torch.optim.lr_scheduler.ReduceOnPlateau
+  params:
+    monitor: val/rec_loss
+    factor:: 0.5
+    patience: 10
+    min_lr: 1e-7
 
   trainer:
     benchmark: True

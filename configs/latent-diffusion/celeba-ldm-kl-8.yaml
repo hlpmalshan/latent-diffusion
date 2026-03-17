@@ -1,0 +1,94 @@
+model:
+  base_learning_rate: 2.0e-7   # set to target_lr by starting main.py with '--scale_lr False'
+  target: ldm.models.diffusion.ddpm.LatentDiffusion
+  params:
+    linear_start: 0.0015
+    linear_end: 0.0195
+    log_every_t: 200
+    timesteps: 1000
+    loss_type: l2
+    first_stage_key: "image"
+    image_size: 8  # Latent size (64/8 = 8)
+    channels: 3
+    scale_by_std: True
+    monitor: 'val/loss_simple_ema'
+    use_ema: True
+    save_statistics: False
+
+    # scheduler_config: # 10000 warmup steps
+    #   target: ldm.lr_scheduler.LambdaLinearScheduler
+    #   params:
+    #     warm_up_steps: [10000]
+    #     cycle_lengths: [10000000000000]
+    #     f_start: [1.e-6]
+    #     f_max: [1.]
+    #     f_min: [1.]
+
+    unet_config:
+      target: ldm.modules.diffusionmodules.openaimodel.UNetModel
+      params:
+        image_size: 8
+        in_channels: 3
+        out_channels: 3
+        model_channels: 192  # Increased slightly from 128 for better capacity on faces
+        attention_resolutions: [8, 4, 2]
+        num_res_blocks: 2
+        channel_mult: [1, 2, 4]
+        num_head_channels: 64
+        use_checkpoint: False
+        legacy: False
+
+    first_stage_config:
+      target: ldm.models.autoencoder.AutoencoderKL
+      params:
+        embed_dim: 3
+        monitor: "val/rec_loss"
+        ckpt_path: "/data/diffusion/repos/latent-diffusion/logs/2025-11-10T16-42-26_autoencoder_kl_8x8x3/checkpoints/epoch=000080.ckpt"  # Update with your trained autoencoder checkpoint
+        ddconfig:
+          double_z: True
+          z_channels: 3
+          resolution: 64
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult: [1, 2, 4, 8]
+          num_res_blocks: 2
+          attn_resolutions: []
+          dropout: 0.0
+        lossconfig:
+          target: torch.nn.Identity
+
+    cond_stage_config: __is_unconditional__
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 64  # Adjusted for 64x64 images
+    num_workers: 4
+    wrap: False
+    train:
+      target: ldm.data.celeba.CELEBATrain
+      params:
+        size: 64
+    validation:
+      target: ldm.data.celeba.CELEBAValidation
+      params:
+        size: 64
+
+lightning:
+  callbacks:
+    image_logger:
+      target: main.ImageLogger
+      params:
+        batch_frequency: 100000
+        max_images: 8
+        increase_log_steps: False
+
+  trainer:
+    benchmark: True
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1
+    max_epochs: 1000  # Reduced from 2000; CelebA has ~162k images (~3x CIFAR10), adjust based on convergence
+    max_steps: 500000  # Adjusted proportionally; monitor val/loss_simple_ema
+    accelerator: "ddp"
+    gpus: "2"

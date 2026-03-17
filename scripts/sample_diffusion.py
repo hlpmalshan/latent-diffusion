@@ -98,6 +98,11 @@ def make_convolutional_sample(model, batch_size, vanilla=False, custom_steps=Non
         t1 = time.time()
 
     x_sample = model.decode_first_stage(sample)
+    # decoded = []
+    # for i in range(0, sample.shape[0], decode_batch_size):
+    #     decoded.append(model.decode_first_stage(sample[i:i + decode_batch_size]))
+    # x_sample = torch.cat(decoded, dim=0)
+
 
     log["sample"] = x_sample
     log["time"] = t1 - t0
@@ -212,7 +217,7 @@ def get_parser():
         type=int,
         nargs="?",
         help="the bs",
-        default=64
+        default=128
     )
     parser.add_argument(
         "--device",
@@ -220,6 +225,13 @@ def get_parser():
         default="cuda",
         help="device to use (e.g., cuda, cuda:1, cpu)"
     )
+    # parser.add_argument(
+    #     "--decode_batch_size",
+    #     type=int,
+    #     nargs="?",
+    #     help="batch size for first-stage decode",
+    #     default=32
+    # )
     return parser
 
 

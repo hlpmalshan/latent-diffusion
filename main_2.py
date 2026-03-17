@@ -25,7 +25,7 @@ def get_parser(**parser_kwargs):
     def str2bool(v):
         if isinstance(v, bool):
             return v
-        if v.lower() in ("yes", "true", "t", "y", "1"):
+        if v.lower() in ("yes", "true", "d", "y", "1"):
             return True
         elif v.lower() in ("no", "false", "f", "n", "0"):
             return False
@@ -117,7 +117,7 @@ def get_parser(**parser_kwargs):
         type=str2bool,
         nargs="?",
         const=True,
-        default=True,
+        default=False,
         help="scale base-lr by ngpu * batch_size * n_accumulate",
     )
     parser.add_argument(
@@ -515,7 +515,6 @@ if __name__ == "__main__":
     cfgdir = os.path.join(logdir, "configs")
     seed_everything(opt.seed)
 
-    trainer = None
     try:
         # init and save configs
         configs = [OmegaConf.load(cfg) for cfg in opt.base]
@@ -525,7 +524,7 @@ if __name__ == "__main__":
         # merge trainer cli with config
         trainer_config = lightning_config.get("trainer", OmegaConf.create())
         # default to ddp
-        trainer_config["accelerator"] = "ddp"
+        # trainer_config["accelerator"] = "ddp"
         for k in nondefault_trainer_args(opt):
             trainer_config[k] = getattr(opt, k)
         if not "gpus" in trainer_config:
@@ -539,6 +538,8 @@ if __name__ == "__main__":
         lightning_config.trainer = trainer_config
 
         # model
+        config.model.params.reg = opt.reg   # Add reg parameter
+        config.model.params.log_path = ckptdir  # Set log_path to ckptdir
         model = instantiate_from_config(config.model)
 
         # trainer and callbacks
@@ -680,7 +681,8 @@ if __name__ == "__main__":
         # configure learning rate
         bs, base_lr = config.data.params.batch_size, config.model.base_learning_rate
         if not cpu:
-            ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
+            ngpu = 1
+            # ngpu = len(lightning_config.trainer.gpus.strip(",").split(','))
         else:
             ngpu = 1
         if 'accumulate_grad_batches' in lightning_config.trainer:
@@ -730,7 +732,7 @@ if __name__ == "__main__":
         if not opt.no_test and not trainer.interrupted:
             trainer.test(model, data)
     except Exception:
-        if opt.debug and trainer is not None and trainer.global_rank == 0:
+        if opt.debug and trainer.global_rank == 0:
             try:
                 import pudb as debugger
             except ImportError:
@@ -739,10 +741,10 @@ if __name__ == "__main__":
         raise
     finally:
         # move newly created debug project to debug_runs
-        if opt.debug and not opt.resume and trainer is not None and trainer.global_rank == 0:
+        if opt.debug and not opt.resume and trainer.global_rank == 0:
             dst, name = os.path.split(logdir)
             dst = os.path.join(dst, "debug_runs", name)
             os.makedirs(os.path.split(dst)[0], exist_ok=True)
             os.rename(logdir, dst)
-        if trainer is not None and trainer.global_rank == 0:
+        if trainer.global_rank == 0:
             print(trainer.profiler.summary())

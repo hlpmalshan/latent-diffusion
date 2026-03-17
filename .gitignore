@@ -12,4 +12,6 @@ ldm/modules/diffusionmodules/__pycache__/
 ldm/modules/distributions/__pycache__/
 ldm/modules/losses/__pycache__/
 src/
-taming/
+taming/*
+!taming/__init__.py
+samples/
