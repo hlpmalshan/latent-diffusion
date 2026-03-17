@@ -16,3 +16,4 @@ taming/*
 !taming/__init__.py
 samples/
 ckpt/*.ckpt
+ckpt/*.ckpt
